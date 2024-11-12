@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from layers import *
 
+'''
 class AppeanceEncoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -16,9 +17,6 @@ class AppeanceEncoder(nn.Module):
         self.resblock3d_96 = nn.ModuleList([ResBlock3DCustom(96, 96) for _ in range(3)])
         
     def forward(self, x):
-        '''
-        x: image => size: [batch, 3, 256, 256]
-        '''
         out = self.conv(x)              # [1, 64, 256, 256]
         out = self.resblock2d_128(out)  # [1, 128, 256, 256]
         out = self.avgpool(out)         # [1, 128, 128, 128]
@@ -37,7 +35,7 @@ class AppeanceEncoder(nn.Module):
             fs = resblock3d_96(fs)
 
         return fs  # [1, 96, 16, 32, 32]
-    
+'''    
 
 if __name__ == '__main__':
     x = torch.randn(1, 3, 256, 256)

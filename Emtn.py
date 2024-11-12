@@ -29,6 +29,7 @@ class MotionEncoder(nn.Module):
         self.ResBottleneckBlock_1024_5 = ResBottleneck(in_C = 1024, out_C = 1024)
 
         self.ResBottleneckBlock_2048_downsample = ResBottleneck(in_C = 1024, out_C = 2048, stride = 2)
+
         self.ResBottleneckBlock_2048_1 = ResBottleneck(in_C = 2048, out_C = 2048)
         self.ResBottleneckBlock_2048_2 = ResBottleneck(in_C = 2048, out_C = 2048)
 
@@ -37,7 +38,8 @@ class MotionEncoder(nn.Module):
         self.yaw = nn.Linear(in_features = 2048, out_features = 66)
         self.pitch = nn.Linear(in_features = 2048, out_features = 66)
         self.roll = nn.Linear(in_features = 2048, out_features = 66)
-        self.delta = nn.Linear(in_features = 2048, out_features = 60)
+        self.translation = nn.Linear(in_features = 2048, out_features = 3)
+        self.deformation = nn.Linear(in_features = 2048, out_features = 60)
     
     # The full angle range is divided into 66 bins for rotation angles, and the network predicts which bin the target angle is in
     def forward(self, x):
@@ -73,13 +75,12 @@ class MotionEncoder(nn.Module):
         yaw = F.softmax(self.yaw(out), dim = 1)   # size: [batch, 66]
         pitch = F.softmax(self.pitch(out), dim = 1)   # size: [batch, 66]
         roll = F.softmax(self.roll(out), dim = 1)   # size: [batch, 66]
+        translation = self.translation(out)   # size: [batch, 3]
+        deformation = self.deformation(out)   # size: [batch, 60]
 
-        #z_pose = torch.cat((yaw, pitch, roll), dim = 0)
-        z_dyn = self.delta(out)   # size: [batch, 60]
-
-        return yaw, pitch, roll, z_dyn
+        return yaw, pitch, roll, translation, deformation
 
 if __name__ == '__main__':
-    x = torch.randn(5, 3, 256, 256)
+    x = torch.randn(1, 3, 256, 256)
     model = MotionEncoder().cuda()
-    print(model(x.cuda())[3].shape)   
+    print(model(x.cuda())) 

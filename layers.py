@@ -6,23 +6,19 @@ import torch
 # and all convolutional layers, except the first and the last ones, are used with weight standardization
 
 # redefine convolution
-class Conv2d_WS(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int = 0, dilation: int = 1, groups: int = 1, bias: bool = True):
-        super().__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias = False)
-        if bias:
-            self.bias = nn.Parameter(torch.zeros(out_channels))
-        else:
-            self.bias = None
-        
+
+class Conv2d_WS(nn.Conv2d):
+    '''
+    Inherited from nn.Conv2d class
+    '''
     def forward(self, x):
-        weight = self.conv.weight
+        weight = self.weight
         weight_mean = weight.mean(dim=[1, 2, 3], keepdim = True)
         weight_std = weight.std(dim=[1, 2, 3], keepdim = True) + 1e-5  # Adding a small epsilon to avoid division by zero
         weight_normalized = (weight - weight_mean) / weight_std
-        output = F.conv2d(x, weight_normalized, self.bias, self.conv.stride, self.conv.padding, self.conv.dilation, self.conv.groups)
+        output = F.conv2d(x, weight_normalized, self.bias, self.stride, self.padding, self.dilation, self.groups)
         return output
-    
+
 class ResBlock2DCustom(nn.Module):
     # num_groups can be a parameter
     def __init__(self, in_channels: int, out_channels: int):
@@ -136,14 +132,21 @@ class DownBlock2D(nn.Module):
 class ResBottleneck(nn.Module):
     def __init__(self, in_C: int, out_C: int, stride: int = 1):
         super().__init__()
+        self.stride = stride
+        self.in_C = in_C
+        self.out_C = out_C
         self.conv1 = nn.Conv2d(in_channels = in_C, out_channels = out_C // 4, kernel_size = 1)
         self.norm1 = nn.BatchNorm2d(num_features = out_C // 4)
         self.conv2 = nn.Conv2d(in_channels = out_C // 4, out_channels = out_C // 4, kernel_size = 3, stride = stride, padding = 1)
         self.norm2 = nn.BatchNorm2d(num_features = out_C // 4)
         self.conv3 = nn.Conv2d(in_channels = out_C // 4, out_channels = out_C, kernel_size = 1)
         self.norm3 = nn.BatchNorm2d(num_features = out_C)
-        self.conv4 = nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 1, stride = stride)
-        self.norm4 = nn.BatchNorm2d(num_features = out_C)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_C != out_C:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_C, out_C, kernel_size = 1, stride = stride),
+                nn.BatchNorm2d(num_features = out_C))
  
     def forward(self, x):
         out = self.conv1(x)
@@ -152,11 +155,12 @@ class ResBottleneck(nn.Module):
         out = F.relu(self.norm2(out))
         out = self.conv3(out)
         out = self.norm3(out)
-
-        x = self.conv4(x)
-        x = self.norm4(x)
-        out += x 
-        
+        # residual connection
+        if self.stride != 1 or self.in_C != self.out_C:
+            shortcut = self.shortcut(x)
+            out += shortcut
+        else:
+            out += x
         return F.relu(out)
 
 
@@ -226,7 +230,7 @@ if __name__ == "__main__":
     identity_tensor = torch.randn(2, input_tensor.size(1), 64, 64)
 
     # Forward pass
-    model = SPADEResBlock(3, 6, upsample = True)
-    output = model(input_tensor, identity_tensor)
+    model = Conv2d_WS(3, 64, 3)
+    output = model(input_tensor)
 
     print("Output shape:", output.shape)  # Output shape
