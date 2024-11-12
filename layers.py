@@ -95,12 +95,12 @@ class ResBlock3D(nn.Module):
     input size: (N, Cin, F, H, W)
     output size: (N, Cout, Fout, Hout, Wout)
     '''
-    def __init__(self, in_features: int, kernel_size: int, stride: int, padding: int):
+    def __init__(self, in_C: int, out_C: int):
         super().__init__()
-        self.conv1 = nn.Conv3d(in_channels = in_features, out_channels = in_features, kernel_size = kernel_size, stride = stride, padding = padding)
-        self.conv2 = nn.Conv3d(in_channels = in_features, out_channels = in_features, kernel_size = kernel_size, stride = stride, padding = padding)
-        self.norm1 = nn.BatchNorm3d(num_features = in_features)
-        self.norm2 = nn.BatchNorm3d(num_features = in_features)
+        self.conv1 = nn.Conv3d(in_channels = in_C, out_channels = out_C, kernel_size = 3, padding = 1)
+        self.conv2 = nn.Conv3d(in_channels = out_C, out_channels = out_C, kernel_size = 3, padding = 1)
+        self.norm1 = nn.BatchNorm3d(num_features = in_C)
+        self.norm2 = nn.BatchNorm3d(num_features = out_C)
 
     def forward(self, x):
         out = F.relu(self.norm1(x))
@@ -110,15 +110,30 @@ class ResBlock3D(nn.Module):
         out += x
         return out
     
+class UpBlock3D(nn.Module):
+    '''
+    Upsampling block for use in encoder
+    '''
+    def __init__(self, in_C: int, out_C: int):
+        super().__init__()
+        self.conv = nn.Conv3d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        self.norm = nn.BatchNorm3d(num_features = out_C)
+
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor = (1, 2, 2), mode = 'trilinear')    # Upsample by a factor of 2
+        out = self.conv(x)
+        out = F.relu(self.norm(out))
+        return out
+
 class DownBlock2D(nn.Module):
     '''
     Downsampling block for use in encoder
     '''
-    def __init__(self, in_features: int, out_features: int, kernel_size: int = 3, stride: int = 1, padding: int = 1, groups: int = 1):
+    def __init__(self, in_C: int, out_C: int):
         super().__init__()
-        self.conv = nn.Conv2d(in_channels = in_features, out_channels = out_features, kernel_size = kernel_size, stride = stride, padding = padding, groups = groups)
-        self.norm = nn.BatchNorm2d(num_features = out_features)
-        self.pool = nn.AvgPool2d(kernel_size = (2, 2), stride = 2)
+        self.conv = nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        self.norm = nn.BatchNorm2d(num_features = out_C)
+        self.pool = nn.AvgPool2d(kernel_size = 2, stride = 2)
 
     def forward(self, x):
         out = self.conv(x)

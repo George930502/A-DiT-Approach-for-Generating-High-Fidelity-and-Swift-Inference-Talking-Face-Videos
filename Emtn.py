@@ -33,7 +33,7 @@ class MotionEncoder(nn.Module):
         self.ResBottleneckBlock_2048_1 = ResBottleneck(in_C = 2048, out_C = 2048)
         self.ResBottleneckBlock_2048_2 = ResBottleneck(in_C = 2048, out_C = 2048)
 
-        self.avgpool = nn.AvgPool2d(kernel_size = 7)
+        self.avgpool = nn.AdaptiveAvgPool2d(output_size = 1)
 
         self.yaw = nn.Linear(in_features = 2048, out_features = 66)
         self.pitch = nn.Linear(in_features = 2048, out_features = 66)
@@ -81,6 +81,6 @@ class MotionEncoder(nn.Module):
         return yaw, pitch, roll, translation, deformation
 
 if __name__ == '__main__':
-    x = torch.randn(1, 3, 256, 256)
+    x = torch.randn(1, 3, 512, 512)
     model = MotionEncoder().cuda()
-    print(model(x.cuda())) 
+    print(model(x.cuda())[3].shape) 
