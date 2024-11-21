@@ -117,10 +117,12 @@ class UpBlock3D(nn.Module):
     def __init__(self, in_C: int, out_C: int):
         super().__init__()
         self.conv = nn.Conv3d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
-        self.norm = nn.BatchNorm3d(num_features = out_C)
+        self.norm = nn.BatchNorm3d(num_features = out_C)  # affine is default to "True"
 
     def forward(self, x):
-        x = F.interpolate(x, scale_factor = (1, 2, 2), mode = 'trilinear')    # Upsample by a factor of 2
+        # x = F.interpolate(x, scale_factor = (1, 2, 2), mode = 'trilinear')    # Upsample by a factor of 2
+        _, _, d, h, w = x.shape
+        x = F.interpolate(x, size = (d, 2 * h, 2 * w))
         out = self.conv(x)
         out = F.relu(self.norm(out))
         return out
@@ -158,7 +160,7 @@ class ResBottleneck(nn.Module):
         self.norm3 = nn.BatchNorm2d(num_features = out_C)
 
         self.shortcut = nn.Sequential()
-        if stride != 1 or in_C != out_C:
+        if stride != 1:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_C, out_C, kernel_size = 1, stride = stride),
                 nn.BatchNorm2d(num_features = out_C))
@@ -171,7 +173,7 @@ class ResBottleneck(nn.Module):
         out = self.conv3(out)
         out = self.norm3(out)
         # residual connection
-        if self.stride != 1 or self.in_C != self.out_C:
+        if self.stride != 1:
             shortcut = self.shortcut(x)
             out += shortcut
         else:
