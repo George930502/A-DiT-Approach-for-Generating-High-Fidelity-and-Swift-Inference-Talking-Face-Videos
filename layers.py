@@ -74,17 +74,17 @@ class ResBlock3DCustom(nn.Module):
         return out + out_prev
 
 class ResBlock2D(nn.Module):
-    def __init__(self, in_features: int, out_features: int, kernel_size: int, stride: int, padding: int):
+    def __init__(self, in_C: int, out_C: int):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels = in_features, out_channels = out_features, kernel_size = kernel_size, stride = stride, padding = padding)
-        self.conv2 = nn.Conv2d(in_channels = out_features, out_channels = out_features, kernel_size = kernel_size, stride = stride, padding = padding)
-        self.norm1 = nn.BatchNorm2d(num_features = in_features)
-        self.norm2 = nn.BatchNorm2d(num_features = out_features)
+        self.conv1 = nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        self.conv2 = nn.Conv2d(in_channels = out_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        self.norm1 = nn.InstanceNorm2d(num_features = in_C, affine = True)
+        self.norm2 = nn.InstanceNorm2d(num_features = out_C, affine = True)
 
     def forward(self, x):
-        out = F.relu(self.norm1(x))
+        out = F.relu(self.norm1(x), inplace = True)
         out = self.conv1(out)
-        out = F.relu(self.norm2(out))
+        out = F.relu(self.norm2(out), inplace = True)
         out = self.conv2(out)
         out += x
         return out
@@ -97,8 +97,8 @@ class ResBlock3D(nn.Module):
     '''
     def __init__(self, in_C: int, out_C: int):
         super().__init__()
-        self.conv1 = nn.Conv3d(in_channels = in_C, out_channels = out_C, kernel_size = 3, padding = 1)
-        self.conv2 = nn.Conv3d(in_channels = out_C, out_channels = out_C, kernel_size = 3, padding = 1)
+        self.conv1 = nn.Conv3d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        self.conv2 = nn.Conv3d(in_channels = out_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
         self.norm1 = nn.BatchNorm3d(num_features = in_C)
         self.norm2 = nn.BatchNorm3d(num_features = out_C)
 
@@ -110,6 +110,24 @@ class ResBlock3D(nn.Module):
         out += x
         return out
     
+class UpBlock2D(nn.Module):
+    '''
+    Upsampling block for use in encoder
+    '''
+    def __init__(self, in_C: int, out_C: int):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        self.norm = nn.InstanceNorm2d(num_features = out_C)  # affine is default to "True"
+        # self.upsample = nn.Upsample(scale_factor = (1, 2, 2))
+
+    def forward(self, x):
+        # x = F.interpolate(x, scale_factor = (1, 2, 2), mode = 'trilinear')    # Upsample by a factor of 2
+        _, _, h, w = x.shape
+        x = F.interpolate(x, size = (2 * h, 2 * w))
+        out = self.conv(x)
+        out = F.relu(self.norm(out), inplace = True)
+        return out
+
 class UpBlock3D(nn.Module):
     '''
     Upsampling block for use in encoder
@@ -117,14 +135,15 @@ class UpBlock3D(nn.Module):
     def __init__(self, in_C: int, out_C: int):
         super().__init__()
         self.conv = nn.Conv3d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
-        self.norm = nn.BatchNorm3d(num_features = out_C)  # affine is default to "True"
+        self.norm = nn.InstanceNorm3d(num_features = out_C, affine = True)  # affine is default to "True"
+        # self.upsample = nn.Upsample(scale_factor = (1, 2, 2))
 
     def forward(self, x):
         # x = F.interpolate(x, scale_factor = (1, 2, 2), mode = 'trilinear')    # Upsample by a factor of 2
         _, _, d, h, w = x.shape
         x = F.interpolate(x, size = (d, 2 * h, 2 * w))
         out = self.conv(x)
-        out = F.relu(self.norm(out))
+        out = F.relu(self.norm(out), inplace = True)
         return out
 
 class DownBlock2D(nn.Module):
@@ -134,16 +153,36 @@ class DownBlock2D(nn.Module):
     def __init__(self, in_C: int, out_C: int):
         super().__init__()
         self.conv = nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
-        self.norm = nn.BatchNorm2d(num_features = out_C)
-        self.pool = nn.AvgPool2d(kernel_size = 2, stride = 2)
+        # self.norm = nn.BatchNorm2d(num_features = out_C)
+        # MGPU utilizes nn.SyncBatchNorm()
+        self.norm = nn.InstanceNorm2d(num_features = out_C, affine = True)
+        self.pool = nn.AvgPool2d((2, 2))
 
     def forward(self, x):
         out = self.conv(x)
         out = self.norm(out)
-        out = F.relu(out)
+        out = F.relu(out, inplace = True)
         out = self.pool(out)
         return out
-    
+
+class DownBlock3D(nn.Module):
+    '''
+    Downsampling block for use in encoder
+    '''
+    def __init__(self, in_C: int, out_C: int):
+        super().__init__()
+        self.conv = nn.Conv3d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        # self.norm = nn.BatchNorm2d(num_features = out_C)
+        # MFPU utilizes nn.SyncBatchNorm()
+        self.norm = nn.InstanceNorm3d(num_features = out_C, affine = True)
+        self.pool = nn.AvgPool3d((1, 2, 2))
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.norm(out)
+        out = F.relu(out, inplace = True)
+        out = self.pool(out)
+        return out
 
 
 class ResBottleneck(nn.Module):
@@ -153,32 +192,32 @@ class ResBottleneck(nn.Module):
         self.in_C = in_C
         self.out_C = out_C
         self.conv1 = nn.Conv2d(in_channels = in_C, out_channels = out_C // 4, kernel_size = 1)
-        self.norm1 = nn.BatchNorm2d(num_features = out_C // 4)
+        self.norm1 = nn.InstanceNorm2d(num_features = out_C // 4, affine = True)
         self.conv2 = nn.Conv2d(in_channels = out_C // 4, out_channels = out_C // 4, kernel_size = 3, stride = stride, padding = 1)
-        self.norm2 = nn.BatchNorm2d(num_features = out_C // 4)
+        self.norm2 = nn.InstanceNorm2d(num_features = out_C // 4, affine = True)
         self.conv3 = nn.Conv2d(in_channels = out_C // 4, out_channels = out_C, kernel_size = 1)
-        self.norm3 = nn.BatchNorm2d(num_features = out_C)
+        self.norm3 = nn.InstanceNorm2d(num_features = out_C, affine = True)
 
         self.shortcut = nn.Sequential()
-        if stride != 1:
+        if stride != 1 or in_C != out_C:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_C, out_C, kernel_size = 1, stride = stride),
-                nn.BatchNorm2d(num_features = out_C))
+                nn.InstanceNorm2d(num_features = out_C, affine = True))
  
     def forward(self, x):
         out = self.conv1(x)
-        out = F.relu(self.norm1(out))
+        out = F.relu(self.norm1(out), inplace = True)
         out = self.conv2(out)
-        out = F.relu(self.norm2(out))
+        out = F.relu(self.norm2(out), inplace = True)
         out = self.conv3(out)
         out = self.norm3(out)
         # residual connection
-        if self.stride != 1:
+        if self.stride != 1 or self.in_C != self.out_C:
             shortcut = self.shortcut(x)
             out += shortcut
         else:
             out += x
-        return F.relu(out)
+        return F.relu(out, inplace = True)
 
 
 class SPADE(nn.Module):
