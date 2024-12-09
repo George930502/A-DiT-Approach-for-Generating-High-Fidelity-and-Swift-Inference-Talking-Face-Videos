@@ -3,7 +3,7 @@ In this study, we present a novel diffusion transformer (DiT)-based approach to 
 
 ## Pretrained Headpose Estimator (HopeNet)
 [300W-LP, alpha 1, robust to image quality](https://drive.google.com/file/d/1m25PrSE7g9D2q2XJVMR6IA7RaCvWSzCR/view)  
-Put hopenet_robust_alpha1.pkl under the pretrained folder
+Put ```hopenet_robust_alpha1.pkl``` under the pretrained folder
 ```plaintext
-/path/to/repo/
+pretrained/
     hopenet_robust_alpha1.pkl
