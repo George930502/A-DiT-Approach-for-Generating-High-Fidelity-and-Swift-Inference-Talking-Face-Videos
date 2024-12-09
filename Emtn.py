@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from layers import *
 import numpy as np
 
-class MotionEncoder(nn.Module): 
+class HeadPoseEstimator_ExpressionDeformationEstimator(nn.Module): 
     def __init__(self, num_kp: int = 20, n_bins: int = 66):
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels = 3, out_channels = 64, kernel_size = 7, stride = 2, padding = 3)
@@ -55,7 +55,7 @@ class MotionEncoder(nn.Module):
         '''
         out = self.conv1(x)
         out = self.norm1(out)
-        out = F.relu(out)
+        out = F.relu(out, inplace = True)
         out = self.maxpool(out)
         
         out = self.ResBottleneckBlock_256_downsample(out)  # [B, 256, 64, 64]
@@ -103,5 +103,5 @@ class MotionEncoder(nn.Module):
     
 if __name__ == '__main__':
     x = torch.randn(1, 3, 256, 256)
-    model = MotionEncoder().cuda()
+    model = HeadPoseEstimator_ExpressionDeformationEstimator().cuda()
     print(model(x.cuda())) 

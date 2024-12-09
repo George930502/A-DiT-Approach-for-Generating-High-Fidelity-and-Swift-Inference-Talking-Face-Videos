@@ -17,7 +17,6 @@ class CanonicalKeypointDetector(nn.Module):
         self.downblock2D_5 = DownBlock2D(in_C = 512, out_C = 1024)
 
         self.conv = nn.Conv2d(in_channels = 1024, out_channels = 16384, kernel_size = 1)
-        
         self.upblock3D_1 = UpBlock3D(in_C = 1024, out_C = 512)
         self.upblock3D_2 = UpBlock3D(in_C = 512, out_C = 256)
         self.upblock3D_3 = UpBlock3D(in_C = 256, out_C = 128)

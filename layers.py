@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
+from torch.nn.utils import spectral_norm
 
 # In the architecture of our base model, we replace all BatchNorms with GroupNorms, 
 # and all convolutional layers, except the first and the last ones, are used with weight standardization
@@ -74,10 +75,11 @@ class ResBlock3DCustom(nn.Module):
         return out + out_prev
 
 class ResBlock2D(nn.Module):
-    def __init__(self, in_C: int, out_C: int):
+    def __init__(self, in_C: int, out_C: int, use_weight_norm: bool = False):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
-        self.conv2 = nn.Conv2d(in_channels = out_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        weight_norm = spectral_norm if use_weight_norm else lambda x: x
+        self.conv1 = weight_norm(nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1))
+        self.conv2 = weight_norm(nn.Conv2d(in_channels = out_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1))
         self.norm1 = nn.InstanceNorm2d(num_features = in_C, affine = True)
         self.norm2 = nn.InstanceNorm2d(num_features = out_C, affine = True)
 
@@ -114,9 +116,10 @@ class UpBlock2D(nn.Module):
     '''
     Upsampling block for use in encoder
     '''
-    def __init__(self, in_C: int, out_C: int):
+    def __init__(self, in_C: int, out_C: int, use_weight_norm: bool = False):
         super().__init__()
-        self.conv = nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1)
+        weight_norm = spectral_norm if use_weight_norm else lambda x: x
+        self.conv = weight_norm(nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 3, stride = 1, padding = 1))
         self.norm = nn.InstanceNorm2d(num_features = out_C)  # affine is default to "True"
         # self.upsample = nn.Upsample(scale_factor = (1, 2, 2))
 
@@ -165,6 +168,30 @@ class DownBlock2D(nn.Module):
         out = self.pool(out)
         return out
 
+class DownBlock2D_discriminator(nn.Module):
+    '''
+    Downsampling block for use in discriminator
+    '''
+    def __init__(self, in_C: int, out_C: int, norm: bool = True, pool: bool = False):
+        super().__init__()
+        self.conv = spectral_norm(nn.Conv2d(in_channels = in_C, out_channels = out_C, kernel_size = 4))
+        # self.norm = nn.BatchNorm2d(num_features = out_C)
+        # MGPU utilizes nn.SyncBatchNorm()
+        if norm:
+            self.norm = nn.InstanceNorm2d(num_features = out_C, affine = True)
+        else:
+            self.norm = None
+        self.pool = pool
+
+    def forward(self, x):
+        out = self.conv(x)
+        if self.norm:
+            out = self.norm(out)
+        out = F.leaky_relu(out, negative_slope = 0.2, inplace = True)
+        if self.pool:
+            out = F.avg_pool2d(out, (2, 2))
+        return out
+    
 class DownBlock3D(nn.Module):
     '''
     Downsampling block for use in encoder

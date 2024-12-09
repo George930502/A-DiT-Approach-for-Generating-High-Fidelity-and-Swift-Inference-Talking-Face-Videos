@@ -3,24 +3,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 from layers import *
 from utils import *
+from torch.nn.utils import spectral_norm
 
 class Generator(nn.Module):
     def __init__(self):
         
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels = 16 * 32, out_channels = 256, kernel_size = 3, stride = 1, padding = 1)
+        self.conv1 = spectral_norm(nn.Conv2d(in_channels = 16 * 32, out_channels = 256, kernel_size = 3, stride = 1, padding = 1))
         self.bn1 = nn.InstanceNorm2d(num_features = 256, affine = True)
         self.conv2 = nn.Conv2d(in_channels = 256, out_channels = 256, kernel_size = 1)
 
-        self.ResBlock2D_1 = ResBlock2D(in_C = 256, out_C = 256)
-        self.ResBlock2D_2 = ResBlock2D(in_C = 256, out_C = 256)
-        self.ResBlock2D_3 = ResBlock2D(in_C = 256, out_C = 256)
-        self.ResBlock2D_4 = ResBlock2D(in_C = 256, out_C = 256)
-        self.ResBlock2D_5 = ResBlock2D(in_C = 256, out_C = 256)
-        self.ResBlock2D_6 = ResBlock2D(in_C = 256, out_C = 256)
+        self.ResBlock2D_1 = ResBlock2D(in_C = 256, out_C = 256, use_weight_norm = True)
+        self.ResBlock2D_2 = ResBlock2D(in_C = 256, out_C = 256, use_weight_norm = True)
+        self.ResBlock2D_3 = ResBlock2D(in_C = 256, out_C = 256, use_weight_norm = True)
+        self.ResBlock2D_4 = ResBlock2D(in_C = 256, out_C = 256, use_weight_norm = True)
+        self.ResBlock2D_5 = ResBlock2D(in_C = 256, out_C = 256, use_weight_norm = True)
+        self.ResBlock2D_6 = ResBlock2D(in_C = 256, out_C = 256, use_weight_norm = True)
 
-        self.upblock2D_1 = UpBlock2D(in_C = 256, out_C = 128)
-        self.upblock2D_2 = UpBlock2D(in_C = 128, out_C = 64)
+        self.upblock2D_1 = UpBlock2D(in_C = 256, out_C = 128, use_weight_norm = True)
+        self.upblock2D_2 = UpBlock2D(in_C = 128, out_C = 64, use_weight_norm = True)
 
         self.conv3 = nn.Conv2d(in_channels = 64, out_channels = 3, kernel_size = 7, stride = 1, padding = 3)
 

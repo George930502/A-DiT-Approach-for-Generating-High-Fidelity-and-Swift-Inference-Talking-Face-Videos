@@ -1,6 +1,20 @@
 import torch
 import torch.nn.functional as F
 
+def make_coordinate_grid_2d(spatial_size):
+    """
+    Create a meshgrid [-1,1] x [-1,1] of given spatial_size.
+    """
+    h, w = spatial_size
+    x = torch.arange(h).cuda()
+    y = torch.arange(w).cuda()
+    x = 2 * (x / (h - 1)) - 1
+    y = 2 * (y / (w - 1)) - 1
+    xx = x.view(-1, 1).repeat(1, w)
+    yy = y.view(1, -1).repeat(h, 1)
+    meshed = torch.cat([yy.unsqueeze(2), xx.unsqueeze(2)], 2)
+    return meshed  # returned shape: (x, y, 2)
+
 def make_coordinate_grid_3d(spatial_size):
     """
     Create a meshgrid [-1,1] x [-1,1] x [-1,1] of given spatial_size.
@@ -71,6 +85,74 @@ def kp2gaussian_3d(kp, spatial_size, kp_variance = 0.01):
     out = torch.exp(-0.5 * (mean_sub ** 2).sum(-1) / kp_variance)  # apply gaussian formula
     return out
 
+def kp2gaussian_2d(kp, spatial_size, kp_variance=0.01):
+    '''
+    Generate a 2D Gaussian distribution associated with each keypoints, representing the spatial influence range corresponding to the keypoints.
+    kp shape: [N, num_kp, 3]
+    spatial shape: [H, W]
+    '''
+    N, K = kp.shape[:2]
+    coordinate_grid = make_coordinate_grid_2d(spatial_size).view(1, 1, *spatial_size, 2).repeat(N, K, 1, 1, 1)
+    mean = kp.view(N, K, 1, 1, 2)
+    mean_sub = coordinate_grid - mean
+    out = torch.exp(-0.5 * (mean_sub ** 2).sum(-1) / kp_variance)
+    return out  # shape: [N, num_kp, H, W]
+
+
+def rotation_matrix_x(theta):
+    theta = theta.view(-1, 1, 1)
+    z = torch.zeros_like(theta)
+    o = torch.ones_like(theta)
+    c = torch.cos(theta)
+    s = torch.sin(theta)
+    return torch.cat(
+        [
+            torch.cat([c, z, s], 2),
+            torch.cat([z, o, z], 2),
+            torch.cat([-s, z, c], 2),
+        ], dim = 1)
+
+def rotation_matrix_y(theta):
+    theta = theta.view(-1, 1, 1)
+    z = torch.zeros_like(theta)
+    o = torch.ones_like(theta)
+    c = torch.cos(theta)
+    s = torch.sin(theta)
+    return torch.cat(
+        [
+            torch.cat([o, z, z], 2),
+            torch.cat([z, c, -s], 2),
+            torch.cat([z, s, c], 2),
+        ], dim = 1)
+
+
+def rotation_matrix_z(theta):
+    theta = theta.view(-1, 1, 1)
+    z = torch.zeros_like(theta)
+    o = torch.ones_like(theta)
+    c = torch.cos(theta)
+    s = torch.sin(theta)
+    return torch.cat(
+        [
+            torch.cat([c, -s, z], 2),
+            torch.cat([s, c, z], 2),
+            torch.cat([z, z, o], 2),
+        ], dim = 1)
+
+def transformkp(yaw, pitch, roll, canonical_kp, translation, deformation):
+    '''
+    yaw shape: [B]
+    pitch shape: [B]
+    roll.shape: [B]
+    canonical_kp shape: [B, 20, 3]
+    translation shape: [B, 3]
+    deformation shape: [B, 20, 3]
+    '''
+    rot_mat = rotation_matrix_x(yaw) @ rotation_matrix_y(pitch) @ rotation_matrix_z(roll)  # shape: [B, 3, 3]
+    transformed_kp = torch.matmul(rot_mat.unsqueeze(1), canonical_kp.unsqueeze(-1)).squeeze(-1) + translation.unsqueeze(1) + deformation
+    return transformed_kp, rot_mat
+
+
 def create_heatmap_representations(fs, kp_s, kp_d):
     '''
     fs shape: [N, C, D, H, W]
@@ -113,5 +195,19 @@ def create_deformed_source_image(fs, sparse_motions):
     return sparse_deformed
 
 
+def apply_imagenet_normalization(input):
+    mean = input.new_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+    std = input.new_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+    output = (input - mean) / std
+    return output
+
+def apply_vggface_normalization(input):
+    mean = input.new_tensor([129.1863, 104.7624, 93.5940]).view(1, 3, 1, 1)
+    std = input.new_tensor([1, 1, 1]).view(1, 3, 1, 1)
+    output = (input * 255 - mean) / std
+    return output
+
 if __name__ == '__main__':
-    print(heatmap2kp(torch.randn(5, 20, 16, 256, 256)).shape)
+    kp = torch.randn(1, 20, 2).cuda()
+    print(kp2gaussian_2d(kp, torch.Size([256, 256])).shape)
+    #print(rotation_matrix_x(torch.tensor([-0.0228])).shape)
