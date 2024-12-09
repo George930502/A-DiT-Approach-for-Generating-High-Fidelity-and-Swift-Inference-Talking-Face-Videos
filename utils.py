@@ -35,28 +35,6 @@ def make_coordinate_grid_3d(spatial_size):
     meshed = torch.cat([xx.unsqueeze_(3), yy.unsqueeze_(3), zz.unsqueeze_(3)], 3)  # returned shape: (x, y, z, 3)
     return meshed
 
-def kp2gaussian(kp, spatial_size, kp_variance):
-    """
-    Transform keypoints into gaussian like representation
-    """
-    mean = kp['keypoints']
-    number_of_leading_dimensions = len(mean.shape) - 1
-
-    coordinate_grid = make_coordinate_grid_3d(spatial_size, mean.type())
-    coordinate_grid = coordinate_grid.to(mean.device)
-
-    shape = (1,) * number_of_leading_dimensions + coordinate_grid.shape
-    coordinate_grid = coordinate_grid.view(*shape)
-    repeats = mean.shape[:number_of_leading_dimensions] + (1, 1, 1, 1)
-    coordinate_grid = coordinate_grid.repeat(*repeats)
-
-    shape = mean.shape[:number_of_leading_dimensions] + (1, 1, 1, 3)
-    mean = mean.view(*shape)
-
-    mean_sub = (coordinate_grid - mean)
-    out = torch.exp(-0.5 * (mean_sub ** 2).sum(-1) / kp_variance)
-    return out
-
 def out2heatmap(out, temperature = 0.1):
     final_shape = out.shape
     heatmap = out.view(final_shape[0], final_shape[1], -1)
